@@ -1,0 +1,9 @@
+yfinance
+hmmlearn
+cvxpy
+numpy
+pandas
+matplotlib
+scipy
+scikit-learn
+jupyter
