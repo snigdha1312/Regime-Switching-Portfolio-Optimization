@@ -193,16 +193,101 @@ def calculate_performance_metrics(
     risk_free_rate: float = 0.0,
 ) -> Dict[str, Any]:
     """
-    Calculate performance metrics. Placeholder stub.
+    Calculate comprehensive performance metrics: Sharpe ratio, Sortino ratio, Max Drawdown,
+    Calmar ratio, Annualized Return, and Annualized Volatility.
+
+    Parameters
+    ----------
+    portfolio_value : pd.Series
+        Daily portfolio equity curve (values or cumulative returns).
+    benchmark_value : pd.Series, optional
+        Daily benchmark equity curve.
+    risk_free_rate : float, default 0.0
+        Annualized risk-free rate of return.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Dictionary of computed performance and risk statistics.
     """
-    pass
+    # 1. Daily returns
+    returns = portfolio_value.pct_change().dropna()
+    total_days = len(portfolio_value)
+    if total_days < 2:
+        return {}
+        
+    years = total_days / 252.0
+    
+    # 2. Annualized Return (Geometric CAGR)
+    val_start = portfolio_value.iloc[0]
+    val_end = portfolio_value.iloc[-1]
+    if val_start <= 0 or val_end <= 0:
+        cagr = 0.0
+    else:
+        cagr = (val_end / val_start) ** (1.0 / years) - 1.0
+        
+    # 3. Annualized Volatility
+    vol = returns.std(ddof=1) * np.sqrt(252)
+    
+    # 4. Sharpe Ratio
+    excess_daily_mean = returns.mean() - (risk_free_rate / 252.0)
+    daily_vol = returns.std(ddof=1)
+    sharpe = (excess_daily_mean / daily_vol) * np.sqrt(252) if daily_vol > 0 else 0.0
+    
+    # 5. Sortino Ratio
+    # Downside deviation uses standard deviation of returns below risk-free rate (or zero)
+    downside_returns = np.minimum(returns - (risk_free_rate / 252.0), 0.0)
+    downside_dev = np.sqrt(np.mean(downside_returns**2)) * np.sqrt(252)
+    sortino = (returns.mean() * 252 - risk_free_rate) / downside_dev if downside_dev > 0 else 0.0
+    
+    # 6. Maximum Drawdown
+    max_dd = calculate_max_drawdown(portfolio_value)
+    
+    # 7. Calmar Ratio
+    calmar = cagr / max_dd if max_dd > 0 else 0.0
+    
+    metrics = {
+        "annualized_return": cagr,
+        "annualized_volatility": vol,
+        "sharpe_ratio": sharpe,
+        "sortino_ratio": sortino,
+        "max_drawdown": max_dd,
+        "calmar_ratio": calmar
+    }
+    
+    # Optional: compare to benchmark if provided
+    if benchmark_value is not None:
+        bench_returns = benchmark_value.pct_change().dropna()
+        bench_cagr = (benchmark_value.iloc[-1] / benchmark_value.iloc[0]) ** (1.0 / years) - 1.0
+        bench_vol = bench_returns.std(ddof=1) * np.sqrt(252)
+        bench_excess = bench_returns - (risk_free_rate / 252.0)
+        bench_sharpe = (bench_excess.mean() / bench_returns.std(ddof=1)) * np.sqrt(252) if bench_returns.std() > 0 else 0.0
+        
+        metrics["benchmark_return"] = bench_cagr
+        metrics["benchmark_volatility"] = bench_vol
+        metrics["benchmark_sharpe"] = bench_sharpe
+        
+    return metrics
 
 
 def calculate_max_drawdown(equity_curve: pd.Series) -> float:
     """
-    Calculate maximum drawdown. Placeholder stub.
+    Calculate the maximum peak-to-trough drawdown of an equity curve.
+
+    Parameters
+    ----------
+    equity_curve : pd.Series
+        Daily portfolio values.
+
+    Returns
+    -------
+    float
+        Maximum drawdown as a positive fraction (e.g. 0.15 for 15%).
     """
-    pass
+    peaks = equity_curve.cummax()
+    drawdowns = (equity_curve - peaks) / peaks
+    max_dd = abs(drawdowns.min())
+    return float(max_dd)
 
 
 def walk_forward_split(
